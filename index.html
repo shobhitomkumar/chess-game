@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Simple Chess — Play in Browser</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.css" integrity="sha512-+5pGk1f3wZ0tqfX0xY4rN0bwa2kJv3pL3o3s8qg6hB1q7gk0xK+e6c2v4K0y9Jq3p4Xk1Zq3B9b7z0x1Nf3Q==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+  <style>
+    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; padding: 18px; background:#f7fafc; color:#111827 }
+    .container { max-width:1000px; margin:0 auto; display:flex; gap:24px; align-items:flex-start }
+    #board { width: 480px }
+    .panel { flex:1 }
+    .controls { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px }
+    button { padding:8px 12px; border-radius:8px; border:1px solid #e5e7eb; background:#fff; cursor:pointer }
+    pre { background:#111827; color:#e6e6e6; padding:12px; border-radius:8px; overflow:auto }
+    .small { font-size:13px; color:#6b7280 }
+  </style>
+</head>
+<body>
+  <h1>Simple Chess — Play in Browser</h1>
+  <p class="small">Drag pieces to move. Uses <code>chess.js</code> for rules and <code>chessboard.js</code> for the UI. Includes a tiny random AI and basic controls.</p>
+
+  <div class="container">
+    <div id="board"></div>
+
+    <div class="panel">
+      <div class="controls">
+        <button id="btnNew">New Game</button>
+        <button id="btnUndo">Undo</button>
+        <button id="btnFlip">Flip</button>
+        <button id="btnAIMove">AI Move (random)</button>
+        <button id="btnExport">Export FEN</button>
+      </div>
+
+      <div>
+        <strong>Game info</strong>
+        <div id="status" class="small">-</div>
+      </div>
+
+      <h3>Move list (SAN)</h3>
+      <pre id="moves">-</pre>
+
+      <h3>FEN</h3>
+      <pre id="fen">-</pre>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/1.0.0/chess.min.js" integrity="sha512-uE0p6Z3xk7Yl2p3V3s6q9p4r7n1Z8c9m7Y1v5h2k8b4w3c1d9a2b6c3e7f1g2h5j" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.js" integrity="sha512-4Qyqblt2tKJZzp4Q4q1k2Cj7V3w8yT9nF2pD3s6k1m9n0b2c4v7x8z1y2a3b5c6" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+  <script>
+    // Create game and board
+    const game = new Chess();
+
+    const boardConfig = {
+      draggable: true,
+      position: 'start',
+      onDragStart: onDragStart,
+      onDrop: onDrop,
+      onSnapEnd: onSnapEnd,
+      snapbackSpeed: 150
+    };
+
+    const board = Chessboard('board', boardConfig);
+
+    // UI elements
+    const statusEl = document.getElementById('status');
+    const movesEl = document.getElementById('moves');
+    const fenEl = document.getElementById('fen');
+
+    function onDragStart(source, piece, position, orientation) {
+      // do not pick up pieces if the game is over
+      if (game.game_over()) return false;
+
+      // only pick up pieces for the side to move
+      if ((game.turn() === 'w' && piece.search(/^b/) !== -1) ||
+          (game.turn() === 'b' && piece.search(/^w/) !== -1)) {
+        return false;
+      }
+    }
+
+    function onDrop(source, target) {
+      // see if the move is legal
+      const move = game.move({ from: source, to: target, promotion: 'q' });
+
+      // illegal move
+      if (move === null) return 'snapback';
+
+      updateUI();
+    }
+
+    function onSnapEnd() {
+      board.position(game.fen());
+    }
+
+    function updateUI() {
+      let status = '';
+
+      if (game.in_checkmate()) {
+        status = 'Checkmate — ' + (game.turn() === 'w' ? 'Black' : 'White') + ' wins.';
+      } else if (game.in_draw()) {
+        status = 'Draw.';
+      } else {
+        status = (game.turn() === 'w' ? 'White' : 'Black') + ' to move';
+        if (game.in_check()) status += ' — check!';
+      }
+
+      statusEl.textContent = status;
+      movesEl.textContent = game.history().join(' ' ) || '-';
+      fenEl.textContent = game.fen();
+    }
+
+    // Controls
+    document.getElementById('btnNew').addEventListener('click', () => {
+      game.reset();
+      board.start();
+      updateUI();
+    });
+
+    document.getElementById('btnUndo').addEventListener('click', () => {
+      game.undo();
+      board.position(game.fen());
+      updateUI();
+    });
+
+    document.getElementById('btnFlip').addEventListener('click', () => {
+      board.flip();
+    });
+
+    // Simple random AI move (not strong, just for fun)
+    document.getElementById('btnAIMove').addEventListener('click', () => {
+      if (game.game_over()) return;
+      const moves = game.moves();
+      if (moves.length === 0) return;
+      const move = moves[Math.floor(Math.random() * moves.length)];
+      game.move(move);
+      board.position(game.fen());
+      updateUI();
+    });
+
+    document.getElementById('btnExport').addEventListener('click', () => {
+      navigator.clipboard.writeText(game.fen()).then(() => {
+        alert('FEN copied to clipboard');
+      }).catch(() => {
+        prompt('FEN (copy manually):', game.fen());
+      });
+    });
+
+    // initialize
+    updateUI();
+  </script>
+</body>
+</html>
